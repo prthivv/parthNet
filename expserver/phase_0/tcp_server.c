@@ -41,36 +41,40 @@ int main(){
     listen(listen_sock_fd,MAX_ACCEPT_BACKLOG);
     printf("[INFO] Server listening on port %d\n", PORT);
 
-    //Setting up client address struct and accepting connection
-    struct sockaddr_in client_addr;
-    socklen_t client_addr_len;
+    
 
-    int conn_sock_fd=accept(listen_sock_fd, (struct sockaddr *)&client_addr,&client_addr_len);
-    printf("[INFO] Client connected to server\n");
-
-    //Setting up receiving loop
-
+    
     while(1){
-        char buff[BUFF_SIZE];
+        //Setting up client address struct and accepting connection
+        struct sockaddr_in client_addr;
+        socklen_t client_addr_len;
 
-        memset(buff,0,BUFF_SIZE);
+        int conn_sock_fd=accept(listen_sock_fd, (struct sockaddr *)&client_addr,&client_addr_len);
+        printf("[INFO] Client connected to server\n");
 
-        ssize_t read_n = recv(conn_sock_fd,buff,sizeof(buff),0);
+        //Setting up receiving loop
+        while(1){
+            char buff[BUFF_SIZE];
 
-        if(read_n<0){
-            printf("[INFO] Error occured. Closing server\n");
-            close(conn_sock_fd);
-            exit(1);
+            memset(buff,0,BUFF_SIZE);
+
+            ssize_t read_n = recv(conn_sock_fd,buff,sizeof(buff),0);
+
+            if(read_n<0){
+                printf("[INFO] Error occured. Closing connection\n");
+                close(conn_sock_fd);
+                break;
+            }
+            else if(read_n==0){
+                printf("[INFO] Client Disconnected. Closing connection\n");
+                close(conn_sock_fd);
+                break;
+            }
+            printf("[CLIENT MESSAGE] %s",buff);
+
+            stringreverse(buff);
+
+            send(conn_sock_fd,buff,read_n,0);
         }
-        else if(read_n==0){
-            printf("[INFO] Client Disconnected. Closing server\n");
-            close(conn_sock_fd);
-            exit(1);
-        }
-        printf("[CLIENT MESSAGE] %s",buff);
-
-        stringreverse(buff);
-
-        send(conn_sock_fd,buff,read_n,0);
     }
 }
