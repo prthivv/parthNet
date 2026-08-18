@@ -1,6 +1,8 @@
 #include "xps_connection.h"
 
-xps_connection_t *xps_connection_create(int epoll_fd,int sock_fd){
+void connection_loop_read_handler(void *ptr);
+
+xps_connection_t *xps_connection_create(xps_core_t *core,int sock_fd){
     xps_connection_t *connection=(xps_connection_t *)malloc(sizeof(xps_connection_t));
 
     if(connection==NULL){
@@ -8,14 +10,20 @@ xps_connection_t *xps_connection_create(int epoll_fd,int sock_fd){
         return NULL;
     }
 
-    xps_loop_attach(epoll_fd,sock_fd,EPOLLIN);
+    if (xps_loop_attach(core->loop, sock_fd, EPOLLIN, connection, connection_loop_read_handler) != OK) {
+        logger(LOG_ERROR, "xps_connection_create()", "xps_loop_attach() failed");
+        close(sock_fd);
+        free(connection->remote_ip);
+        free(connection);
+        return NULL;
+    }
 
-    connection->epoll_fd=epoll_fd;
+    connection->core=core;
     connection->sock_fd=sock_fd;
     connection->listener=NULL;
     connection->remote_ip=get_remote_ip(sock_fd);
 
-    vec_push(&connections,connection);
+    vec_push(&(core->connections),connection);
 
     logger(LOG_DEBUG, "xps_connection_create()", "created connection");
     return connection;
@@ -24,15 +32,16 @@ xps_connection_t *xps_connection_create(int epoll_fd,int sock_fd){
 void xps_connection_destroy(xps_connection_t *connection){
     assert(connection!=NULL);
 
-    for(int i=0;i<connections.length;i++){
-        xps_connection_t *curr=connections.data[i];
+    for(int i=0;i<connection->core->connections.length;i++){
+        xps_connection_t *curr=connection->core->connections.data[i];
         if(curr==connection){
-            connections.data[i]=NULL;
+            connection->core->connections.data[i]=NULL;
+            connection->core->n_null_connections++;
             break;
         }
     }
 
-    xps_loop_detach(connection->epoll_fd,connection->sock_fd);
+    xps_loop_detach(connection->core->loop,connection->sock_fd);
 
     close(connection->sock_fd);
 
@@ -43,8 +52,10 @@ void xps_connection_destroy(xps_connection_t *connection){
     logger(LOG_DEBUG, "xps_connection_destroy()", "destroyed connection");
 }
 
-void xps_connection_read_handler(xps_connection_t *connection){
-    assert(connection!=NULL);
+void connection_loop_read_handler(void *ptr){
+    assert(ptr!=NULL);
+
+    xps_connection_t *connection=ptr;
 
     char buff[DEFAULT_BUFFER_SIZE];
 
