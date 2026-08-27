@@ -1,6 +1,8 @@
 #include "xps_connection.h"
 
 void connection_loop_read_handler(void *ptr);
+void connection_loop_write_handler(void *ptr);
+void connection_loop_close_handler(void *ptr);
 
 xps_connection_t *xps_connection_create(xps_core_t *core,int sock_fd){
     xps_connection_t *connection=(xps_connection_t *)malloc(sizeof(xps_connection_t));
@@ -10,18 +12,19 @@ xps_connection_t *xps_connection_create(xps_core_t *core,int sock_fd){
         return NULL;
     }
 
-    if (xps_loop_attach(core->loop, sock_fd, EPOLLIN, connection, connection_loop_read_handler) != OK) {
+    connection->core=core;
+    connection->sock_fd=sock_fd;
+    connection->listener=NULL;
+    connection->remote_ip=get_remote_ip(sock_fd);
+    connection->write_buff_list=xps_buffer_list_create();
+
+    if (xps_loop_attach(core->loop, sock_fd, EPOLLIN | EPOLLOUT, connection, connection_loop_read_handler,connection_loop_write_handler,connection_loop_close_handler) != OK) {
         logger(LOG_ERROR, "xps_connection_create()", "xps_loop_attach() failed");
         close(sock_fd);
         free(connection->remote_ip);
         free(connection);
         return NULL;
     }
-
-    connection->core=core;
-    connection->sock_fd=sock_fd;
-    connection->listener=NULL;
-    connection->remote_ip=get_remote_ip(sock_fd);
 
     vec_push(&(core->connections),connection);
 
@@ -46,6 +49,8 @@ void xps_connection_destroy(xps_connection_t *connection){
     close(connection->sock_fd);
 
     free(connection->remote_ip);
+
+    xps_buffer_list_destroy(connection->write_buff_list);
 
     free(connection);
 
@@ -78,7 +83,7 @@ void connection_loop_read_handler(void *ptr){
 
     buff[read_n]='\0';
 
-    printf("[CLIENT MESSAGE] %s",buff);
+    //printf("[CLIENT MESSAGE] %s",buff);
 
     for(int start=0,end=read_n-2;start<end;start++,end--){
         char temp=buff[start];
@@ -86,17 +91,64 @@ void connection_loop_read_handler(void *ptr){
         buff[end]=temp;
     }
 
-    long bytes_written=0;
-    long message_len=read_n;
-    while(bytes_written<message_len){
-        long write_n=send(connection->sock_fd,buff+bytes_written,read_n-bytes_written,0);
-        if(write_n < 0) {
-            logger(LOG_ERROR, "xps_connection_read_handler()", "send() failed");
-            perror("Error message");
+    xps_buffer_t *buffer=xps_buffer_create(read_n,read_n,NULL);
+
+    if(buffer==NULL){
+        logger(LOG_ERROR,"connection_loop_read_handler()","xps_buffer_create() failed");
+        xps_connection_destroy(connection);
+        return;
+    }
+
+    memcpy(buffer->data,buff,read_n);
+
+    xps_buffer_list_append(connection->write_buff_list,buffer);
+
+}
+
+void connection_loop_write_handler(void *ptr){
+    assert(ptr!=NULL);
+
+    xps_connection_t *connection=ptr;
+
+    if(connection->write_buff_list->len==0)
+        return;
+
+    xps_buffer_t *buff=xps_buffer_list_read(connection->write_buff_list,connection->write_buff_list->len);
+
+    
+    if(buff==NULL){
+        logger(LOG_ERROR,"connection_loop_write_handler()","xps_buffer_list_read() failed");
+        xps_connection_destroy(connection);
+        return;
+    }
+
+    if(buff->len==0){
+        xps_buffer_destroy(buff);
+        return;
+    }
+
+    long write_n=send(connection->sock_fd,buff->data,buff->len,0);
+    
+    if(write_n<0){
+        if(errno==EAGAIN||errno==EWOULDBLOCK){
+            xps_buffer_destroy(buff);
+            return;
+        }
+        else{
+            xps_buffer_destroy(buff);
             xps_connection_destroy(connection);
             return;
         }
-        bytes_written+=write_n;
     }
+    xps_buffer_list_clear(connection->write_buff_list,write_n);
+    xps_buffer_destroy(buff);
+    return;
+}
 
+void connection_loop_close_handler(void *ptr){
+    assert(ptr!=NULL);
+
+    xps_connection_t *connection=ptr;
+
+    xps_connection_destroy(connection);
 }
