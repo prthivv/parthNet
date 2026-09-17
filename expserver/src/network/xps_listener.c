@@ -109,7 +109,7 @@ void listener_connection_handler(void *ptr){
         }
 
         if(make_socket_non_blocking(conn_sock_fd)!=0){
-            logger(LOG_ERROR,"xps_listener_connection_handler()","make_socker_non_block() failed");
+            logger(LOG_ERROR,"listener_connection_handler()","make_socker_non_block() failed");
             perror("Error message");
             return;
         }
@@ -117,14 +117,28 @@ void listener_connection_handler(void *ptr){
         xps_connection_t *client=xps_connection_create(listener->core,conn_sock_fd);
 
         if(client==NULL){
-            logger(LOG_ERROR, "xps_listener_connection_handler()", "xps_connection_create() failed");
+            logger(LOG_ERROR, "listener_connection_handler()", "xps_connection_create() failed");
             close(conn_sock_fd);
             return;
         }
-        client->listener=listener;
+        if(listener->port==8001){
+            logger(LOG_INFO,"listener_connection_handler()","creating upstream connection to 127.0.0.1:3000");
+            xps_connection_t *upstream=xps_upstream_create(listener->core,"127.0.0.1",3000);
 
-        xps_pipe_t *pipe=xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,client->source,client->sink);
+            if(upstream==NULL){
+                logger(LOG_ERROR,"listener_connection_handler()","xps_upstream_create() failed");
+                xps_connection_destroy(client);
+                return;
+            }
+            xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,client->source,upstream->sink);
+            xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,upstream->source,client->sink);
 
-        logger(LOG_INFO, "xps_listener_connection_handler()", "new connection");
+        }
+        else{
+            client->listener=listener;
+            xps_pipe_t *pipe=xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,client->source,client->sink);
+        }
+
+        logger(LOG_INFO, "listener_connection_handler()", "new connection");
     }
 }
