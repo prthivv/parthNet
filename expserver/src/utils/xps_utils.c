@@ -91,3 +91,10 @@ void vec_filter_null(vec_void_t *v) {
 
   vec_deinit(&temp);
 }
+
+const char *get_file_ext(const char *file_path){
+
+  const char *dot=strrchr(file_path,'.');
+
+  return dot && dot> strrchr(file_path,'/') ? dot:NULL;
+}

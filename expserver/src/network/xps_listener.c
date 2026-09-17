@@ -134,6 +134,31 @@ void listener_connection_handler(void *ptr){
             xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,upstream->source,client->sink);
 
         }
+        else if(listener->port==8002){
+            int error;
+            xps_file_t *file = xps_file_create(listener->core,"../public/sample.txt",&error);
+
+            if (file == NULL) {
+                logger(LOG_INFO, "xps_listener_connection_handler()", "File access denied");
+                xps_connection_destroy(client);
+                return;
+            }
+
+            xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,file->source,client->sink);
+        }
+        else if (listener->port == 8003) {
+            int error;
+
+            xps_file_t *file = xps_file_create(listener->core, "../temp/file.txt", &error);
+
+            if (file == NULL) {
+                logger(LOG_INFO, "xps_listener_connection_handler()", "File access denied");
+                xps_connection_destroy(client);
+                return;
+            }
+
+            xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, file->source, client->sink);
+        }
         else{
             client->listener=listener;
             xps_pipe_t *pipe=xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,client->source,client->sink);
