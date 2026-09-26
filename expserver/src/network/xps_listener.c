@@ -98,10 +98,11 @@ void listener_connection_handler(void *ptr){
 
     xps_listener_t *listener=ptr;
 
-    struct sockaddr conn_addr;
-    socklen_t conn_addr_len = sizeof(conn_addr);
 
     while(1){
+        struct sockaddr conn_addr;
+        socklen_t conn_addr_len = sizeof(conn_addr);
+
         int conn_sock_fd=accept(listener->sock_fd,(struct sockaddr*)&conn_addr,&conn_addr_len);
 
         if(conn_sock_fd<0 && (errno==EAGAIN || errno==EWOULDBLOCK)){
@@ -121,49 +122,16 @@ void listener_connection_handler(void *ptr){
             close(conn_sock_fd);
             return;
         }
-        if(listener->port==8001){
-            logger(LOG_INFO,"listener_connection_handler()","creating upstream connection to 127.0.0.1:3000");
-            xps_connection_t *upstream=xps_upstream_create(listener->core,"127.0.0.1",3000);
+        
+        client->listener=listener;
 
-            if(upstream==NULL){
-                logger(LOG_ERROR,"listener_connection_handler()","xps_upstream_create() failed");
-                xps_connection_destroy(client);
-                return;
-            }
-            xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,client->source,upstream->sink);
-            xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,upstream->source,client->sink);
+        xps_session_t *session=xps_session_create(listener->core,client);
 
+        if(session==NULL){
+            logger(LOG_ERROR,"listener_connection_handler()","xps_session_create() failed");
+            xps_connection_destroy(client);
+            return;
         }
-        else if(listener->port==8002){
-            int error;
-            xps_file_t *file = xps_file_create(listener->core,"../public/sample.txt",&error);
-
-            if (file == NULL) {
-                logger(LOG_INFO, "xps_listener_connection_handler()", "File access denied");
-                xps_connection_destroy(client);
-                return;
-            }
-
-            xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,file->source,client->sink);
-        }
-        else if (listener->port == 8003) {
-            int error;
-
-            xps_file_t *file = xps_file_create(listener->core, "../temp/file.txt", &error);
-
-            if (file == NULL) {
-                logger(LOG_INFO, "xps_listener_connection_handler()", "File access denied");
-                xps_connection_destroy(client);
-                return;
-            }
-
-            xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, file->source, client->sink);
-        }
-        else{
-            client->listener=listener;
-            xps_pipe_t *pipe=xps_pipe_create(listener->core,DEFAULT_PIPE_BUFF_THRESH,client->source,client->sink);
-        }
-
         logger(LOG_INFO, "listener_connection_handler()", "new connection");
     }
 }
