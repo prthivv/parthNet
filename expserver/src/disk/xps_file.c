@@ -13,17 +13,29 @@ xps_file_t *xps_file_create(xps_core_t *core, const char *file_path, int *error)
     logger(LOG_DEBUG, "file_create()", "Requested file: %s", file_path);
 
     char *resolved_path = realpath(file_path,NULL);
+
+    if(resolved_path == NULL){
+        if(errno == ENOENT){
+            *error = E_NOTFOUND;
+        } 
+        else if(errno == EACCES){
+            *error = E_PERMISSION;
+        }
+
+        logger(LOG_ERROR, "xps_file_create()", "realpath() failed for requested file");
+        return NULL;
+    }
+
     char *resolved_public = realpath("../public",NULL);
 
-    if(resolved_path == NULL || resolved_public ==NULL){
-        logger(LOG_ERROR,"xps_file_create()","realpath() failed");
-        *error = E_PERMISSION;
+    if (resolved_public == NULL) {
+        logger(LOG_ERROR, "xps_file_create()", "realpath() failed for public directory");
         free(resolved_path);
-        free(resolved_public);
         return NULL;
     }
 
     size_t public_len =strlen(resolved_public);
+
     
     if(strncmp(resolved_path,resolved_public,public_len)!=0){
         logger(LOG_WARNING,"xps_file_create()","file requested is outside of public directory");
