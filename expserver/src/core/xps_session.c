@@ -381,13 +381,33 @@ void session_process_request(xps_session_t *session){
         return;
     }
 
-    if(session->http_req->path){
-        char file_path[DEFAULT_BUFFER_SIZE];
-        strcpy(file_path, "../public");
-        strcat(file_path,session->http_req->path);
+    int error;
+    xps_config_lookup_t *lookup = xps_config_lookup(session->core->config,session->http_req,session->client,&error);
+
+    if(lookup == NULL){
+        if(error == E_NOTFOUND){
+            http_res = xps_http_res_create(session->core,HTTP_NOT_FOUND);
+        }
+        else if(error == E_PERMISSION){
+            http_res = xps_http_res_create(session->core,HTTP_FORBIDDEN);
+        }
+        else{
+            http_res = xps_http_res_create(session->core,HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        xps_buffer_t *buff = xps_http_res_serialize(http_res);
+        set_to_client_buff(session,buff);
+        xps_http_res_destroy(http_res);
+        return;
+    }
+
+    session->config_lookup = lookup;
+
+    if(lookup->type==REQ_FILE_SERVE){
         int error;
 
-        xps_file_t *file = xps_file_create(session->core,file_path,&error);
+        logger(LOG_DEBUG,"session_process_request()","file_path=%s",lookup->file_path);
+        xps_file_t *file = xps_file_create(session->core,lookup->file_path,&error);
 
         session->file=file;
 
@@ -473,7 +493,45 @@ void session_process_request(xps_session_t *session){
             logger(LOG_ERROR,"session_process_request()", "xps_pipe_create() failed for file source and file sink");
             return;
         }
-    }   
+    }
+    else if(lookup->type == REQ_REVERSE_PROXY){
+        char host[256];
+        u_int port;
+
+        sscanf(lookup->upstream,"%[^:]:%u",host,&port);
+
+        xps_connection_t *upstream = xps_upstream_create(session->core,host,port);
+
+        if(upstream==NULL){
+            logger(LOG_ERROR,"session_process_request()","xps_connection_create() failed for upstream");
+            http_res = xps_http_res_create(session->core,HTTP_BAD_GATEWAY);
+            set_to_client_buff(session,xps_http_res_serialize(http_res));
+            xps_http_res_destroy(http_res);
+            return;
+        }
+
+        session->upstream = upstream;
+
+        xps_pipe_create(session->core,DEFAULT_PIPE_BUFF_THRESH,session->upstream_source,upstream->sink);
+        xps_pipe_create(session->core,DEFAULT_PIPE_BUFF_THRESH,upstream->source,session->upstream_sink);
+    }
+
+    else if(lookup->type == REQ_REDIRECT){
+        xps_http_res_t *http_res = xps_http_res_create(session->core,lookup->http_status_code);
+
+        xps_http_set_header(&http_res->headers,"Location",lookup->redirect_url);
+
+        set_to_client_buff(session,xps_http_res_serialize(http_res));
+
+        xps_http_res_destroy(http_res);
+
+        return;
+    }
+    else{
+        logger(LOG_ERROR,"session_process_request()","invalid lookup type");
+        xps_session_destroy(session);
+        return;
+    }
 }
 
 

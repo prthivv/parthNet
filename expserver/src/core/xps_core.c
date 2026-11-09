@@ -1,6 +1,6 @@
 #include "xps_core.h"
 
-xps_core_t *xps_core_create(){
+xps_core_t *xps_core_create(xps_config_t *config){
     xps_core_t *core = malloc(sizeof(xps_core_t));
 
     if(core==NULL){
@@ -25,6 +25,7 @@ xps_core_t *xps_core_create(){
     core->n_null_listeners=0;
     core->n_null_pipes=0;
     core->n_null_sessions=0;
+    core->config=config;
 
     logger(LOG_DEBUG,"xps_core_create()","created core");
 
@@ -88,12 +89,6 @@ void xps_core_start(xps_core_t *core){
 
     logger(LOG_DEBUG,"xps_start()","starting core");
 
-    for(int i=8001;i<=8004;i++){
-        xps_listener_t* listener=xps_listener_create(core,"0.0.0.0",i);
-        logger(LOG_INFO, "xps_core_start()", "Server listening on port %u", i);
-    }
-
-    logger(LOG_DEBUG,"xps_core_start()","core started");
     xps_loop_run(core->loop);
 
     

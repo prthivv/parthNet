@@ -5,6 +5,7 @@
 
 struct xps_core_s {
   xps_loop_t *loop;
+  xps_config_t *config;
   vec_void_t listeners;
   vec_void_t connections;
   vec_void_t pipes;

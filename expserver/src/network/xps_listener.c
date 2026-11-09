@@ -2,7 +2,7 @@
 
 void listener_connection_handler(void *ptr);
 
-xps_listener_t *xps_listener_create(xps_core_t *core, const char*host, u_int port){
+xps_listener_t *xps_listener_create(const char*host, u_int port){
     assert(host!=NULL);
     assert(is_valid_port(port));
 
@@ -53,19 +53,9 @@ xps_listener_t *xps_listener_create(xps_core_t *core, const char*host, u_int por
         return NULL;
     }
 
-    listener->core=core;
     listener->host=host;
     listener->port=port;
     listener->sock_fd=sock_fd;
-
-    if (xps_loop_attach(core->loop, sock_fd, EPOLLIN | EPOLLET, listener, listener_connection_handler,NULL,NULL) != OK) {
-        logger(LOG_ERROR, "xps_connection_create()", "xps_loop_attach() failed");
-        close(sock_fd);
-        free(listener);
-        return NULL;
-    }
-
-    vec_push(&(core->listeners),listener);
 
     logger(LOG_DEBUG,"xps_listener_create()","created listener on port %d",port);
 
