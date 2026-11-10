@@ -13,7 +13,7 @@
 				{
 					"req_path": "/",
 					"type": "file_serve",
-					"dir_path": "../public",
+					"dir_path": "../",
 					"index": ["index.html"],
 					"gzip_enable": true,
 					"gzip_level": 8

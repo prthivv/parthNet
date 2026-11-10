@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <dirent.h>
 
 // 3rd party libraries
 #include "lib/vec/vec.h" // https://github.com/rxi/vec
@@ -183,13 +184,14 @@ typedef void (*xps_handler_t)(void *ptr);
 #include "utils/xps_logger.h"
 #include "utils/xps_utils.h"
 #include "utils/xps_buffer.h"
+#include "utils/xps_cliargs.h"
 #include "disk/xps_file.h"
 #include "disk/xps_mime.h"
+#include "disk/xps_directory.h"
 #include "core/xps_session.h"
 #include "http/xps_http.h"
 #include "http/xps_http_req.h"
 #include "http/xps_http_res.h"
-#include "utils/xps_cliargs.h"
 #include "config/xps_config.h"
 
 #endif

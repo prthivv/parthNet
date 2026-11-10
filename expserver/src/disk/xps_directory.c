@@ -1,0 +1,98 @@
+#include "xps_directory.h"
+
+xps_buffer_t *xps_directory_browsing(const char *dir_path,const char *pathname){
+    assert(dir_path!=NULL);
+    assert(pathname!=NULL);
+
+    size_t buff_size=8192;
+    char *buff = malloc(buff_size);
+
+    if(buff==NULL){
+        logger(LOG_ERROR,"xps_directory_browsing()","malloc() failed for 'buff'");
+        return NULL;
+    }
+
+    buff[0]='\0';
+
+    snprintf(buff,buff_size,"<html><head lang='en'><meta http-equiv='Content-Type' "
+              "content='text/html; "
+              "charset=UTF-8'><meta name='viewport' content='width=device-width, "
+              "initial-scale=1.0'><title>Directory: "
+              "%s</title><style>body{font-family: monospace; "
+              "font-size: 15px;}td {padding: 1.5px 6px; padding-right: 20px;} "
+              "h1{font-family: serif; "
+              "margin: 0;} h3{font-family: serif;margin: 12px 0px; "
+              "background-color: rgba(0,0,0,0.1); "
+              "padding: 4px 0px;}</style></head><body><h1>eXpServer</h1><h3>Index "
+              "of&nbsp;%s</h3><hr><table>",
+              pathname, pathname);
+
+    DIR *dir = opendir(dir_path);
+
+    if(dir==NULL){
+        logger(LOG_ERROR,"xps_directory_browsing()","opendir() failed");
+        free(buff);
+        return NULL;
+    }
+
+    struct dirent *dir_entry;
+
+    while((dir_entry=readdir(dir))!=NULL){
+        
+        if(strcmp(dir_entry->d_name,".") == 0 || strcmp(dir_entry->d_name,"..") == 0)
+            continue;
+
+        char full_path[1024];
+
+        snprintf(full_path,1024,"%s/%s",dir_path,dir_entry->d_name);
+
+        int file_fd = open(full_path,O_RDONLY);
+
+        if(file_fd == -1){
+            logger(LOG_ERROR,"xps_directory_browsing()","failed to open file");
+            continue;
+        }
+
+        struct stat file_stat;
+
+        if(fstat(file_fd, &file_stat) == -1){
+            logger(LOG_ERROR,"xps_directory_browsing()","fstat()");
+            close(file_fd);
+            continue;
+        }
+
+        if(S_ISREG(file_stat.st_mode) || S_ISDIR(file_stat.st_mode)){
+            char *is_dir = S_ISDIR(file_stat.st_mode) ? "/" : "";
+
+            char *temp_pathname = str_create(pathname);
+
+            if(temp_pathname[strlen(temp_pathname)-1] == '/')
+                temp_pathname[strlen(temp_pathname)-1] = '\0';
+
+            if(S_ISREG(file_stat.st_mode)){
+                sprintf(buff + strlen(buff),
+                "<tr><td><a "
+                "href='%s/%s'>%s%s</a></td></tr>\n",
+                temp_pathname,dir_entry-> d_name,dir_entry ->d_name,is_dir);
+            }
+            else{
+                sprintf(
+                    buff + strlen(buff),
+                    "<tr><td><a href='%s/%s'>%s%s</a></td><td></td></tr>\n",
+                    temp_pathname, dir_entry->d_name, dir_entry->d_name, is_dir);
+                    free(temp_pathname);
+            }
+        }
+            close(file_fd);
+    }
+    closedir(dir);
+    sprintf(buff + strlen(buff), "</table></body></html>");
+    xps_buffer_t *directory_browsing = xps_buffer_create(strlen(buff), strlen(buff), (u_char *)buff);
+
+    if(directory_browsing == NULL){
+        logger(LOG_ERROR,"xps_directory_browsing()","xps_buffer_create() returned NULL");
+        free(buff);
+        return NULL;
+    }
+    return directory_browsing;
+}

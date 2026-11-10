@@ -125,3 +125,9 @@ xps_buffer_t *xps_http_res_serialize(xps_http_res_t *http_res){
 
     return buff;
 }
+
+void xps_http_res_set_body(xps_http_res_t *http_res, xps_buffer_t *buff){
+    assert(http_res !=NULL);
+    assert (buff !=NULL);
+    http_res->body = buff;
+}
