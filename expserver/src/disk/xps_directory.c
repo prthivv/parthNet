@@ -69,18 +69,31 @@ xps_buffer_t *xps_directory_browsing(const char *dir_path,const char *pathname){
             if(temp_pathname[strlen(temp_pathname)-1] == '/')
                 temp_pathname[strlen(temp_pathname)-1] = '\0';
 
+            char time_buff[20];
+            strftime(time_buff,sizeof(time_buff),"%Y-%m-%d %H:%M:%S",localtime(&file_stat.st_mtime));
+            double size_kb = (double)file_stat.st_size / 1024.0;
+
             if(S_ISREG(file_stat.st_mode)){
                 sprintf(buff + strlen(buff),
                 "<tr><td><a "
-                "href='%s/%s'>%s%s</a></td></tr>\n",
-                temp_pathname,dir_entry-> d_name,dir_entry ->d_name,is_dir);
+                "href='%s/%s'>%s%s</a></td>"
+                "<td>%s</td>"
+                "<td>%.2f KB</td></tr>\n",
+                temp_pathname,dir_entry-> d_name,dir_entry->d_name,is_dir,time_buff,size_kb);
             }
             else{
                 sprintf(
                     buff + strlen(buff),
-                    "<tr><td><a href='%s/%s'>%s%s</a></td><td></td></tr>\n",
-                    temp_pathname, dir_entry->d_name, dir_entry->d_name, is_dir);
-                    free(temp_pathname);
+                    "<tr><td><a "
+                    "href='%s/%s'>%s%s</a></td>"
+                    "<td>%s</td>"
+                    "<td>-</td></tr>\n",
+                    temp_pathname,
+                    dir_entry->d_name,
+                    dir_entry->d_name,
+                    is_dir,
+                    time_buff
+                );
             }
         }
             close(file_fd);
